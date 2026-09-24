@@ -36,6 +36,8 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/intent-classifier:latest
 
       - name: Trigger deploy workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🚀 Triggering deploy for image tag: ${{ env.BUILD_NUMBER }}"
           gh workflow run deploy.yml \
