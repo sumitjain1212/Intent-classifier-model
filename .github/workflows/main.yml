@@ -1,13 +1,14 @@
-name: Build and create image and Push the Model to Docker registry
+name: Build and Push Docker Image
+
 on:
   workflow_dispatch:
-    branches:
-      - main
+
+permissions:
+  actions: write      # ← needed to trigger the deploy workflow via API
+  contents: read
 
 env:
-  # If run_number is 42 and it's the second attempt, this becomes "42.2"
   BUILD_NUMBER: "${{ github.run_number }}.${{ github.run_attempt }}"
-
 
 jobs:
   build:
@@ -30,5 +31,13 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/Intent-classifier:$BUILD_NUMBER
-      
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/intent-classifier:${{ env.BUILD_NUMBER }}
+            ${{ secrets.DOCKER_USERNAME }}/intent-classifier:latest
+
+      - name: Trigger deploy workflow
+        run: |
+          echo "🚀 Triggering deploy for image tag: ${{ env.BUILD_NUMBER }}"
+          gh workflow run deploy.yml \
+            --ref main \
+            --field image_tag=${{ env.BUILD_NUMBER }}
