@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
         - name: intent-classifier
-          image: <image-name>
+          image: sumitjain1212/intent-classifier
           ports:
             - containerPort: 6000
