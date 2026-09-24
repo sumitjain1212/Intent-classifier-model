@@ -1,38 +1,41 @@
 name: Deploy to kind (EC2)
 
-# Manually trigger a redeploy whenever a new image tag has been pushed to
-# Docker Hub. This workflow does NOT build/push an image — it assumes the
-# image already exists on Docker Hub, and just pulls it onto the EC2 host,
-# loads it into the kind cluster, and rolls the Deployment.
 on:
-  workflow_dispatch:
+  workflow_dispatch:          # ← still manually triggerable
     inputs:
       image_tag:
-        description: "Docker Hub image tag to deploy"
+        description: "Docker Hub image tag to deploy (e.g. 42.1)"
         required: false
         default: "latest"
 
 env:
-  DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}       # e.g. yourdockerhubuser/intent-classifier
-  K8S_NAMESPACE: ${{ vars.K8S_NAMESPACE || 'intent' }}
-  APP_NAME: ${{ vars.APP_NAME || 'intent-classifier' }}
-  CLUSTER_NAME: ${{ vars.CLUSTER_NAME || 'intent-kind' }}
+  DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+  K8S_NAMESPACE:   ${{ vars.K8S_NAMESPACE   || 'intent' }}
+  APP_NAME:        ${{ vars.APP_NAME        || 'intent-classifier' }}
+  CLUSTER_NAME:    ${{ vars.CLUSTER_NAME    || 'intent-kind' }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Verify image exists on Docker Hub
+        run: |
+          IMAGE="${{ env.DOCKERHUB_IMAGE }}:${{ github.event.inputs.image_tag }}"
+          echo "Checking image: $IMAGE"
+          docker manifest inspect "$IMAGE" || \
+            (echo "❌ Image $IMAGE not found on Docker Hub!" && exit 1)
+
       - name: Pull image on EC2 and roll out the new tag
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          host:        ${{ secrets.EC2_HOST }}
+          username:    ${{ secrets.EC2_USER }}
+          key:         ${{ secrets.EC2_SSH_KEY }}
           script_stop: true
           script: |
             set -e
             export KUBECONFIG=/home/ubuntu/.kube/config
-            IMAGE="${{ env.DOCKERHUB_IMAGE }}:${{ inputs.image_tag }}"
+            IMAGE="${{ env.DOCKERHUB_IMAGE }}:${{ github.event.inputs.image_tag }}"
 
             echo "Pulling $IMAGE from Docker Hub..."
             docker pull "$IMAGE"
@@ -48,3 +51,5 @@ jobs:
             echo "Waiting for rollout..."
             kubectl -n "${{ env.K8S_NAMESPACE }}" rollout status \
               "deployment/${{ env.APP_NAME }}" --timeout=180s
+
+            echo "✅ Deployment of $IMAGE complete."
